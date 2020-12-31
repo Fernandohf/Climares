@@ -1,0 +1,113 @@
+esphome:
+  # includes: wind_direction.h
+  name: climares
+  platform: ESP32
+  board: esp32dev
+
+wifi:
+  ssid: "WelcomeToTheJungle"
+  password: "plantinhas"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Climares Fallback Hotspot"
+    password: "00000000"
+
+captive_portal:
+
+# Enable logging
+logger:
+  level: DEBUG
+
+# Enable Home Assistant API
+api:
+
+ota:
+
+text_sensor:
+  # Custom Anemometer Sensor
+  - platform: custom
+    lambda: |-
+      auto wind_dir_sensor = new WindDirectionSensor();
+      App.register_component(wind_dir_sensor);
+      return {wind_dir_sensor};
+
+    text_sensors:
+      - name: "Direção do vento"
+        icon: "mdi:wind-turbine"
+
+  # Version
+  - platform: version
+    name: "ESPHome Version"
+
+
+sensor:
+    # DHT Sensor
+  - platform: dht
+    pin: GPIO23
+    temperature:
+      name: "Temperatura"
+    humidity:
+      name: "Umidade"
+    update_interval: 20s
+    model: DHT11
+
+  # Wind Speed Sensor - LM393
+  - platform: pulse_counter
+    pin: GPIO22
+    name: "Velocidade do Vento"
+    unit_of_measurement: "km/h"
+    update_interval: 20s
+    filters:
+      - lambda: return (x / 5000 /
+              10 * 150 * 7.2 * 3.1415); // Wind speed km/h
+    id: wind_speed
+    icon: "mdi:weather-windy"
+    accuracy_decimals: 1
+
+    # Rain Gauge Sensor
+  - platform: pulse_counter
+    pin: D35
+    name: "Chuva medida no último minuto"
+    unit_of_measurement:
+     "mm/min"
+    update_interval: 60s
+    filters:
+      - multiply: 2.4 #TODO vol_per_flip
+    id: rain_vol
+    accuracy_decimals: 1
+
+  # Rain Volume Integration
+  - platform: integration
+    name: "Volume de Chuva nas últimas 24H"
+    sensor: rain_vol
+    time_unit: min
+    id: rain_integration
+
+# Rain detection sensor
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: 14
+      inverted: True
+    name: "Está chovendo?"
+    device_class: moisture
+
+
+# Time resource
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: America/Fortaleza
+
+  on_time:
+    - seconds: 0
+      minutores: 0
+      hours: 0
+      then:
+        - sensor.integration.reset: rain_integration
+
+# interval:
+#   - interval: 24h
+#     then:
+#       - sensor.integration.reset: rain_integration
